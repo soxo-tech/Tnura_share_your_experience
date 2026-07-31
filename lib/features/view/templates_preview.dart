@@ -15,7 +15,6 @@ import 'package:share_your_experience/features/services/navigation_services.dart
 import 'package:share_your_experience/features/widgets/refracted_button.dart';
 import 'package:share_your_experience/features/widgets/refracted_text.dart';
 import 'package:share_your_experience/features/widgets/svg_image.dart';
-import 'package:share_your_experience/main.dart';
 import 'package:widgets_to_image/widgets_to_image.dart';
 
 /// A StatefulWidget that previews a template for sharing experience.
@@ -77,15 +76,29 @@ class _TemplatePreviewState extends State<TemplatePreview> {
 
     return Scaffold(
       key: _key, // Unique key for the Scaffold to manage its state
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back,
+            color: AppColors.blueDark,
+          ),
+          onPressed: () async {
+            Navigator.of(context).pop();
+          },
+        ),
+      ),
       // Main content of the screen.
       body: Container(
         decoration: BoxDecoration(
           gradient: AppColors.blueGradient,
         ), // Background gradient for the container.
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -107,7 +120,9 @@ class _TemplatePreviewState extends State<TemplatePreview> {
                 ),
               ],
             ),
-
+            SizedBox(
+              height: 25,
+            ),
             // Display area for the picture that the user is going to share.
             AspectRatio(
               aspectRatio: 0.9,
@@ -224,39 +239,71 @@ class _TemplatePreviewState extends State<TemplatePreview> {
                 ),
               ),
             ),
-
+            SizedBox(
+              height: 25,
+            ),
             // Row containing a share button that captures the widget as an image and shares it.
             Row(
               children: [
                 Expanded(
-                  child: RefractedButton(
-                    label: 'SHARE',
-                    isLoading: templateProvider.isLoading,
-                    onTap: () async {
-                      File? file;
-                      templateProvider.toggleLoading = true;
+                  child: Builder(
+                    builder: (buttonContext) => RefractedButton(
+                      label: 'SHARE',
+                      isLoading: templateProvider.isLoading,
+                      onTap: () async {
+                        templateProvider.toggleLoading = true;
+                        try {
+                          // Capture the widget as an image and save it to the device.
+                          await Future.delayed(
+                              const Duration(milliseconds: 100));
+                          final bytes = await controller.capture(pixelRatio: 3);
+                          if (bytes == null) {
+                            if (buttonContext.mounted) {
+                              showSnackBar(buttonContext,
+                                  'Could not prepare the image. Please try again.');
+                            }
+                            return;
+                          }
 
-                      // Capture the widget as an image and save it to the device.
-                      await Future.delayed(const Duration(milliseconds: 100));
-                      final bytes = await controller.capture(pixelRatio: 3);
-                      final directory =
-                          await getApplicationDocumentsDirectory();
-                      file = File('${directory.path}/My_Experience.jpg');
-                      await file?.writeAsBytes(bytes!.toList());
+                          final directory =
+                              await getApplicationDocumentsDirectory();
+                          final file =
+                              File('${directory.path}/My_Experience.jpg');
+                          await file.writeAsBytes(bytes.toList());
 
-                      templateProvider.toggleLoading = false;
+                          // The share sheet is a popover on iPad/macOS and must be
+                          // anchored to a rect, otherwise it fails to present.
+                          if (!buttonContext.mounted) return;
+                          final box =
+                              buttonContext.findRenderObject() as RenderBox?;
+                          final origin = box != null && box.hasSize
+                              ? box.localToGlobal(Offset.zero) & box.size
+                              : null;
 
-                      // Share the image using the appropriate method depending on the platform.
-                      final result = await Share.shareXFiles(
-                        [XFile(file!.path)],
-                        subject: 'I just got screened!',
-                        text: Platform.isIOS ? null : 'I just got screened!',
-                      );
+                          // Share the image using the platform share sheet.
+                          final result = await Share.shareXFiles(
+                            [XFile(file.path)],
+                            subject: 'I just got screened!',
+                            text:
+                                Platform.isIOS ? null : 'I just got screened!',
+                            sharePositionOrigin: origin,
+                          );
 
-                      if (result.status == ShareResultStatus.success) {
-                        if (mounted) pop(context);
-                      }
-                    },
+                          // Bail out if the widget was disposed during the await.
+                          if (!buttonContext.mounted) return;
+                          if (result.status == ShareResultStatus.success) {
+                            pop(buttonContext);
+                          }
+                        } catch (e) {
+                          if (buttonContext.mounted) {
+                            showSnackBar(buttonContext,
+                                'Unable to share. Please try again.');
+                          }
+                        } finally {
+                          templateProvider.toggleLoading = false;
+                        }
+                      },
+                    ),
                   ),
                 ),
               ],

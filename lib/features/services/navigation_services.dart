@@ -86,13 +86,11 @@ void showSnackBar(
 
 class _GlassToastWidget extends StatefulWidget {
   final String title;
-  final String? subtitle;
   final Color tintColor;
   final VoidCallback onDismiss;
 
   const _GlassToastWidget(
       {required this.title,
-      this.subtitle,
       required this.tintColor,
       required this.onDismiss});
 
@@ -140,10 +138,6 @@ class _GlassToastWidgetState extends State<_GlassToastWidget>
 
   @override
   Widget build(BuildContext context) {
-    // We use the color with very low opacity to keep the "glass" look
-    final Color glassColor = widget.tintColor.withOpacity(0.1);
-    final Color borderColor = widget.tintColor.withOpacity(0.6);
-
     return SlideTransition(
         position: _offsetAnimation,
         child: Material(
@@ -164,7 +158,7 @@ class _GlassToastWidgetState extends State<_GlassToastWidget>
                         color: AppColors.backgroundBlueLight, width: 2.5),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.backgroundBlueLight.withOpacity(0.1),
+                        color: AppColors.backgroundBlueLight.withValues(alpha: 0.1),
                         blurRadius: 30,
                         offset: const Offset(0, 10),
                       ),
@@ -183,18 +177,6 @@ class _GlassToastWidgetState extends State<_GlassToastWidget>
                           letterSpacing: -0.4,
                         ),
                       ),
-                      if (widget.subtitle != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          widget.subtitle!,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.primaryDark,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),

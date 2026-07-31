@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
@@ -7,7 +5,15 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:share_your_experience/features/core/colors.dart';
 import 'package:share_your_experience/features/model/templates_model.dart';
 
-/// Manages the application templates and image handling functionalities.
+/// State holder for the Share Your Experience module.
+///
+/// Responsibilities:
+/// * Holds the list of [templates] supplied by the host application via
+///   [setTemplates] (see [ShareExperienceLauncher]).
+/// * Tracks the currently [selectedTemplate] and drives the camera/crop flow
+///   through [chooseTemplate] and [captureImage].
+/// * Exposes loading flags ([templatesLoading], [isLoading]) consumed by the
+///   UI to render shimmer placeholders and button spinners.
 class TemplateProvider extends ChangeNotifier {
   /// The currently selected template.
   TemplatesModel selectedTemplate = TemplatesModel();
@@ -38,77 +44,35 @@ class TemplateProvider extends ChangeNotifier {
   /// Indicates if a custom template is being used.
   bool isCustom = false;
 
-  /// Updates the `isCustom` flag and notifies listeners.
-  set customTemplate(bool value) {
-    isCustom = value;
-    notifyListeners();
-  }
-
   /// Updates the `isLoading` flag and notifies listeners.
   set toggleLoading(bool value) {
     isLoading = value;
     notifyListeners();
   }
 
+  /// The templates currently available for selection.
   List<TemplatesModel> _templates = [];
+
+  /// The templates currently available for selection.
+  ///
+  /// Empty when the host application supplied no templates; the UI renders an
+  /// error message in that case.
   List<TemplatesModel> get templates => _templates;
 
-  /// Parses the JSON string from Remote Config and updates the template list.
-  void initializeWithJson(String jsonString) {
-    if (jsonString.isEmpty) {
-      debugPrint("TemplateProvider: Received empty JSON string.");
-      templatesLoading = false;
-      notifyListeners();
-      return;
-    }
-
-    try {
-      final decodedData = jsonDecode(jsonString);
-
-      if (decodedData is List) {
-        _templates = decodedData
-            .map(
-              (item) => TemplatesModel.fromJson(item as Map<String, dynamic>),
-            )
-            .toList();
-      } else if (decodedData is Map && decodedData.containsKey('templates')) {
-        final List<dynamic> templateList = decodedData['templates'];
-        _templates = templateList
-            .map(
-              (item) => TemplatesModel.fromJson(item as Map<String, dynamic>),
-            )
-            .toList();
-      }
-
-      templatesLoading = false;
-      notifyListeners();
-      debugPrint(
-        "TemplateProvider: Successfully initialized with ${_templates.length} templates.",
-      );
-    } catch (e) {
-      templatesLoading = false;
-      notifyListeners();
-      debugPrint("TemplateProvider: Error parsing templates JSON: $e");
-    }
-  }
-
-  void loadHardcodedTemplates() {
-    final List<Map<String, dynamic>> data = [
-      {
-        "gradient": "",
-        "title": "",
-        "content": "",
-        "bgImage":
-            "",
-        "badgeContent": "",
-        "isCustom": bool,
-      },
-    ];
-
-    _templates = data.map((e) => TemplatesModel.fromJson(e)).toList();
-
+  /// Loads the [templates] supplied by the host application.
+  ///
+  /// The host that embeds this module is the source of truth for templates and
+  /// passes them through [ShareExperienceLauncher]. Passing an empty list is
+  /// valid and signals the UI to show its "something went wrong" state.
+  ///
+  /// Marks loading as complete and notifies listeners so the view rebuilds.
+  void setTemplates(List<TemplatesModel> templates) {
+    _templates = templates;
     templatesLoading = false;
     notifyListeners();
+    debugPrint(
+      "TemplateProvider: Initialized with ${_templates.length} templates from host.",
+    );
   }
 
   /// Captures an image from the camera or prepares for image handling.
@@ -153,15 +117,15 @@ class TemplateProvider extends ChangeNotifier {
     }
   }
 
-  /// Checks if the camera permission has been granted.
+  /// Checks whether the camera permission is currently granted.
   ///
-  /// Requests and verifies the camera permission status.
-  /// Returns `true` if the permission is granted, otherwise `false`.
+  /// This only reads the current status; it does not trigger the OS permission
+  /// prompt. Requesting the permission is handled by [CameraPermissionDialog]
+  /// when the user is not yet granted access, so that the custom dialog acts as
+  /// the gate before the native prompt appears.
+  /// Returns `true` if the permission is already granted, otherwise `false`.
   Future<bool> checkCameraPermission() async {
-  var status = await Permission.camera.status;
-  if (status.isDenied) {
-    status = await Permission.camera.request();
+    final status = await Permission.camera.status;
+    return status.isGranted;
   }
-  return status.isGranted;
-}
 }
