@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:provider/provider.dart';
 import 'package:share_your_experience/features/core/colors.dart';
 import 'package:share_your_experience/features/provider/templates_provider.dart';
 import 'package:share_your_experience/features/services/navigation_services.dart';
-import 'package:share_your_experience/features/view/share_your_experience.dart';
 import 'package:share_your_experience/features/widgets/app_space.dart';
 import 'package:share_your_experience/features/widgets/refracted_button.dart';
 import 'package:share_your_experience/features/widgets/refracted_text.dart';
@@ -16,15 +14,21 @@ import 'package:share_your_experience/features/widgets/refracted_text.dart';
 /// The dialog provides options to either go back or enable the necessary permissions.
 /// If the permissions are granted, the selected template is processed further.
 class CameraPermissionDialog extends StatelessWidget {
-  /// The [ShareExperience] widget that invoked this dialog.
-  /// It contains the template provider and other necessary data.
+  /// Index of the template the user chose, used to resume template selection
+  /// once camera permission is granted.
   final int index;
 
-  /// Constructs a [CameraPermissionDialog].
-  ///
-  /// The [widget] parameter is required and represents the [ShareExperience] widget.
-  const CameraPermissionDialog(
-      {super.key,  required this.index,});
+  /// The provider that drives template selection. Passed in directly so the
+  /// dialog does not depend on being under the provider in the widget tree
+  /// (it is shown on a separate dialog route).
+  final TemplateProvider provider;
+
+  /// Constructs a [CameraPermissionDialog] for the template at [index].
+  const CameraPermissionDialog({
+    super.key,
+    required this.index,
+    required this.provider,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -82,14 +86,16 @@ class CameraPermissionDialog extends StatelessWidget {
                     onTap: () {
                       pop(context);
                       Permission.camera.request().then((value) {
-                        if (value.isPermanentlyDenied) {
-                          openAppSettings();
-                        } else {
-                          final provider = Provider.of<TemplateProvider>(context, listen: false);
-
+                        if (value.isGranted) {
+                          // Permission granted: take a photo (for custom
+                          // templates) and continue to the preview/share flow.
                           provider.chooseTemplate(
                             provider.templates[index],
                           );
+                        } else if (value.isPermanentlyDenied) {
+                          // The OS will no longer show the prompt, so send the
+                          // user to the app settings to enable it manually.
+                          openAppSettings();
                         }
                       });
                     },

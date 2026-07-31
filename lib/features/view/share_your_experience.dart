@@ -61,11 +61,18 @@ class _ShareYourExperienceState extends State<ShareYourExperience> {
             WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
               push(
                 context,
-                TemplatePreview(
-                  template: provider.selectedTemplate,
-                  isCustom: provider.isCustom,
-                  packageName: _effectivePackageName,
-                  isStandalone: widget.isStandalone,
+                // TemplatePreview is pushed as a new route above the Navigator,
+                // so it sits outside this Consumer's provider scope. Forward the
+                // existing provider instance so the whole preview subtree can
+                // read it.
+                ChangeNotifierProvider<TemplateProvider>.value(
+                  value: provider,
+                  child: TemplatePreview(
+                    template: provider.selectedTemplate,
+                    isCustom: provider.isCustom,
+                    packageName: _effectivePackageName,
+                    isStandalone: widget.isStandalone,
+                  ),
                 ),
               );
               provider.isImageReady = false;
@@ -127,6 +134,20 @@ class _ShareYourExperienceState extends State<ShareYourExperience> {
                                   ),
                                 ),
                               ],
+                            ),
+                          )
+                        // Show an error message when no templates were supplied.
+                        : provider.templates.isEmpty
+                        ? Padding(
+                            padding: EdgeInsets.symmetric(vertical: 0.3.sh),
+                            child: Center(
+                              child: RefractedText(
+                                text: 'Something went wrong',
+                                fontSize: 18,
+                                fontWeight: FontWeight.w400,
+                                textColor: Colors.grey,
+                                textAlign: TextAlign.center,
+                              ),
                             ),
                           )
                         //Listview which displays all the available templates
@@ -311,28 +332,32 @@ class _ShareYourExperienceState extends State<ShareYourExperience> {
                                           textColor: AppColors.buttonBlue,
                                           backGroundColor:
                                               AppColors.buttonBlueLight,
-                                          onTap: () {
+                                          onTap: () async {
                                             // Check camera permission before choosing a template.
-                                            provider
-                                                .checkCameraPermission()
-                                                .then((
-                                              value,
-                                            ) {
-                                              if (value) {
-                                                provider.chooseTemplate(
-                                                  provider.templates[index],
-                                                );
-                                              } else {
-                                                // Show a dialog to prompt the user to enable permissions.
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (context) =>
-                                                      CameraPermissionDialog(
-                                                    index: index,
-                                                  ),
-                                                );
-                                              }
-                                            });
+                                            final granted = await provider
+                                                .checkCameraPermission();
+                                            // Guard against using a stale context
+                                            // after the async permission request.
+                                            if (!context.mounted) return;
+                                            if (granted) {
+                                              provider.chooseTemplate(
+                                                provider.templates[index],
+                                              );
+                                            } else {
+                                              // Show a dialog to prompt the user to enable permissions.
+                                              showDialog(
+                                                context: context,
+                                                // Pass the provider instance
+                                                // directly; the dialog lives on
+                                                // a separate route above the
+                                                // Consumer.
+                                                builder: (_) =>
+                                                    CameraPermissionDialog(
+                                                  index: index,
+                                                  provider: provider,
+                                                ),
+                                              );
+                                            }
                                           },
                                         ),
                                       ],

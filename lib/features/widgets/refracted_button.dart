@@ -55,7 +55,7 @@ class RefractedButton extends StatelessWidget {
             backgroundColor: backGroundColor ?? AppColors.buttonBlue,
             // Ensures the button doesn't change color significantly if disabled
             disabledBackgroundColor: (backGroundColor ?? AppColors.buttonBlue)
-                .withOpacity(0.8),
+                .withValues(alpha: 0.8),
             minimumSize: Size(64, height),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             shape: RoundedRectangleBorder(
