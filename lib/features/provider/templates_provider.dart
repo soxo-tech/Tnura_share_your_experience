@@ -128,4 +128,32 @@ class TemplateProvider extends ChangeNotifier {
     final status = await Permission.camera.status;
     return status.isGranted;
   }
+
+  /// The current camera authorization state.
+  ///
+  /// Reads only — it never triggers the OS prompt. The caller needs the full
+  /// status rather than a boolean, because "not asked yet" and "refused for
+  /// good" both report as not-granted but have to be handled differently:
+  /// the first deserves an explanation, the second can only be resolved in
+  /// the app settings.
+  Future<PermissionStatus> cameraPermissionStatus() => Permission.camera.status;
+
+  /// Triggers the OS permission prompt and returns the resulting state.
+  Future<PermissionStatus> requestCameraPermission() =>
+      Permission.camera.request();
+
+  /// Whether the app's own explanation of why the camera is needed has already
+  /// been shown during this session.
+  bool _cameraExplainerShown = false;
+
+  /// Whether the explanation has already been shown (see
+  /// [markCameraExplainerShown]).
+  bool get cameraExplainerShown => _cameraExplainerShown;
+
+  /// Records that the explanation has been shown, so that choosing another
+  /// template does not repeat it. The OS prompt itself is still shown when it
+  /// is due — the operating system limits how often it appears.
+  void markCameraExplainerShown() {
+    _cameraExplainerShown = true;
+  }
 }
