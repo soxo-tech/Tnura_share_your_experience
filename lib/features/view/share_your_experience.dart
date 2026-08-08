@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:share_your_experience/features/core/colors.dart';
 import 'package:share_your_experience/features/provider/templates_provider.dart';
@@ -11,6 +12,7 @@ import 'package:share_your_experience/features/services/navigation_services.dart
 import 'package:share_your_experience/features/view/templates_preview.dart';
 import 'package:share_your_experience/features/widgets/app_space.dart';
 import 'package:share_your_experience/features/widgets/camera_permission_dialog.dart';
+import 'package:share_your_experience/features/widgets/camera_settings_dialog.dart';
 import 'package:share_your_experience/features/widgets/refracted_button.dart';
 import 'package:share_your_experience/features/widgets/refracted_text.dart';
 import 'package:share_your_experience/features/widgets/svg_image.dart';
@@ -333,31 +335,86 @@ class _ShareYourExperienceState extends State<ShareYourExperience> {
                                           backGroundColor:
                                               AppColors.buttonBlueLight,
                                           onTap: () async {
-                                            // Check camera permission before choosing a template.
-                                            final granted = await provider
-                                                .checkCameraPermission();
+                                            final template =
+                                                provider.templates[index];
+
+                                            // Only a template built from the
+                                            // user's own photo opens the
+                                            // camera; the rest are composed
+                                            // from the template's background
+                                            // image. Asking for camera access
+                                            // there would be a prompt we never
+                                            // act on.
+                                            if (!(template.isCustom ?? false)) {
+                                              provider.chooseTemplate(template);
+                                              return;
+                                            }
+
+                                            var status = await provider
+                                                .cameraPermissionStatus();
                                             // Guard against using a stale context
                                             // after the async permission request.
                                             if (!context.mounted) return;
-                                            if (granted) {
-                                              provider.chooseTemplate(
-                                                provider.templates[index],
-                                              );
-                                            } else {
-                                              // Show a dialog to prompt the user to enable permissions.
+
+                                            if (status.isGranted) {
+                                              provider.chooseTemplate(template);
+                                              return;
+                                            }
+
+                                            // Refused for good — the OS will
+                                            // not prompt again, so the only way
+                                            // forward is the app settings.
+                                            if (status.isPermanentlyDenied) {
                                               showDialog(
                                                 context: context,
-                                                // Pass the provider instance
-                                                // directly; the dialog lives on
-                                                // a separate route above the
-                                                // Consumer.
                                                 builder: (_) =>
-                                                    CameraPermissionDialog(
-                                                  index: index,
-                                                  provider: provider,
-                                                ),
+                                                    const CameraSettingsDialog(),
                                               );
+                                              return;
                                             }
+
+                                            // The explanation is shown once.
+                                            // Afterwards go straight to the OS
+                                            // prompt: Android still reports a
+                                            // plain "denied" after a single
+                                            // refusal, and re-showing our own
+                                            // dialog on every tap is what made
+                                            // the app feel like it asks
+                                            // endlessly.
+                                            if (provider.cameraExplainerShown) {
+                                              status = await provider
+                                                  .requestCameraPermission();
+                                              if (!context.mounted) return;
+                                              if (status.isGranted) {
+                                                provider
+                                                    .chooseTemplate(template);
+                                              } else if (status
+                                                  .isPermanentlyDenied) {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (_) =>
+                                                      const CameraSettingsDialog(),
+                                                );
+                                              }
+                                              return;
+                                            }
+
+                                            // First time: explain why the
+                                            // camera is needed, then let the
+                                            // dialog trigger the OS prompt.
+                                            provider.markCameraExplainerShown();
+                                            showDialog(
+                                              context: context,
+                                              // Pass the provider instance
+                                              // directly; the dialog lives on
+                                              // a separate route above the
+                                              // Consumer.
+                                              builder: (_) =>
+                                                  CameraPermissionDialog(
+                                                index: index,
+                                                provider: provider,
+                                              ),
+                                            );
                                           },
                                         ),
                                       ],
